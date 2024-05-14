@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+
+<head>
+  <style>
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin: 2rem;
+
+      >span {
+        font-weight: bold;
+      }
+    }
+
+    textarea {
+      height: 10rem;
+    }
+
+    output {
+      font-family: monospace;
+      padding: 0.5rem;
+      background: oklch(95% 0 0);
+    }
+  </style>
+</head>
+
+<body>
+  <label><span>Input Mermaid</span><textarea id="input">block-beta
+    A-- "X<img src=x onerror=alert(2)>" -->B</textarea></label>
+
+  <figure id="result">
+
+  </figure>
+
+  <label><span>Output HTML</span><output id="output"></output></label>
+</body>
+
+<script type="module" async>
+  import mermaid from "./node_modules/mermaid/dist/mermaid.esm.mjs"
+  import dompurify from "./node_modules/dompurify/dist/purify.es.mjs"
+
+  await mermaid.initialize({
+    startOnLoad: false,
+    // stop user configs in the mermaid files from overriding these keys
+    secure: ['secure', 'securityLevel', 'startOnLoad', 'maxTextSize'],
+    // escape tags and disable click events within the diagram
+    securityLevel: 'sandbox',
+    flowchart: {
+      diagramPadding: 48
+    },
+    gantt: {
+      useWidth: 1200
+    },
+    pie: {
+      useWidth: 1200
+    },
+    sequence: {
+      diagramMarginY: 40
+    },
+    theme: 'default'
+  })
+
+  const ALLOWED_TAGS = [
+    'a',
+    'b',
+    'blockquote',
+    'br',
+    'dd',
+    'div',
+    'dl',
+    'dt',
+    'em',
+    // foreignObject is necessary for links to work
+    'foreignObject',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'h7',
+    'h8',
+    'hr',
+    'i',
+    'li',
+    'ul',
+    'ol',
+    'p',
+    'pre',
+    'span',
+    'strike',
+    'strong',
+    'table',
+    'tbody',
+    'td',
+    'tfoot',
+    'th',
+    'thead',
+    'tr'
+  ]
+
+  const reSanitize = (content) =>
+    dompurify.sanitize(content, {
+      USE_PROFILES: {
+        svg: true
+      },
+      RETURN_DOM_FRAGMENT: true,
+      ADD_TAGS: ALLOWED_TAGS,
+      ADD_ATTR: ['transform-origin', 'dominant-baseline']
+    })
+
+  const input = document.getElementById('input')
+  const output = document.getElementById('output')
+  const result = document.getElementById('result')
+
+  function base64ToUnicode(base64) {
+    const binString = atob(base64);
+    const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0))
+    return new TextDecoder().decode(bytes)
+  }
+
+  const base64UrlRegex = /^data:text\/html;base64,(?<data>[0-9a-z+/=]+)$/i
+
+  const update = async () => {
+    const {svg: iframeHtml} = await mermaid.render('diagram', input.value)
+    const domBox = document.createElement('div')
+    domBox.innerHTML = iframeHtml
+    const iframeEl = domBox.firstChild
+    console.log(iframeEl)
+    const svgUrl = iframeEl.src
+    const {data} = base64UrlRegex.exec(svgUrl).groups
+    const html = base64ToUnicode(data)
+    const sanitized = reSanitize(html)
+    result.replaceChildren(sanitized)
+    output.textContent = result.innerHTML
+  }
+
+  input.addEventListener("input", update)
+  update()
+</script>
